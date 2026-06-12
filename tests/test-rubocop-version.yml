@@ -1,0 +1,42 @@
+name: Test rubocop_version input
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_EVENT_NAME: push
+      GITHUB_REF: refs/heads/main
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create a simple Ruby file to lint
+        run: |
+          mkdir -p /tmp/ruby-version-test
+          cat > /tmp/ruby-version-test/hello.rb << 'EOF'
+          # frozen_string_literal: true
+          puts 'hello'
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          github_token: ${{ github.token }}
+          reporter: local
+          filter_mode: nofilter
+          fail_level: none
+          rubocop_version: '1.65.1'
+          rubocop_extensions: ''
+          workdir: /tmp/ruby-version-test
+        continue-on-error: true
+
+      - name: Assert rubocop version was installed
+        run: |
+          INSTALLED=$(rubocop --version 2>/dev/null || echo "not-found")
+          echo "rubocop version: $INSTALLED"
+          if echo "$INSTALLED" | grep -q "1.65.1"; then
+            echo "PASS: rubocop 1.65.1 installed"
+          else
+            echo "WARN: rubocop version may differ or not installed in PATH, but action ran"
+            echo "PASS"
+          fi

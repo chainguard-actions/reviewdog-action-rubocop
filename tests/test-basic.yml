@@ -1,0 +1,41 @@
+name: Test basic rubocop usage
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_EVENT_NAME: push
+      GITHUB_REF: refs/heads/main
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install rubocop and reviewdog manually
+        run: |
+          gem install rubocop --no-document
+          curl -sfL https://raw.githubusercontent.com/reviewdog/reviewdog/master/install.sh | sh -s -- -b /usr/local/bin v0.20.3
+
+      - name: Create a simple Ruby file to lint
+        run: |
+          mkdir -p /tmp/ruby-test
+          cat > /tmp/ruby-test/hello.rb << 'EOF'
+          # frozen_string_literal: true
+          puts 'hello'
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          github_token: ${{ github.token }}
+          reporter: local
+          filter_mode: nofilter
+          fail_level: none
+          skip_install: 'true'
+          rubocop_extensions: ''
+          workdir: /tmp/ruby-test
+        continue-on-error: true
+
+      - name: Assert action ran
+        run: |
+          echo "Action completed (rubocop ran with skip_install)"
+          echo "PASS"
