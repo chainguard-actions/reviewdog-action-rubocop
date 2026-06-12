@@ -1,0 +1,1 @@
+# reviewdog-action-rubocop
