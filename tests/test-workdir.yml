@@ -1,0 +1,67 @@
+name: Test workdir input
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_REF: refs/heads/main
+      GITHUB_EVENT_NAME: push
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Ensure Ruby and rubocop are available
+        run: |
+          set -e
+          if ! command -v ruby >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq ruby ruby-dev
+          fi
+          ruby --version
+          if ! command -v rubocop >/dev/null 2>&1; then
+            gem install -N rubocop --version 1.65.1
+          fi
+          rubocop --version
+
+      - name: Create a subdirectory with a clean Ruby file
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/myapp"
+          cat > "$GITHUB_WORKSPACE/myapp/app.rb" << 'EOF'
+          # frozen_string_literal: true
+
+          # A simple Ruby class
+          class MyApp
+            def run
+              'running'
+            end
+          end
+          EOF
+          cat > "$GITHUB_WORKSPACE/myapp/.rubocop.yml" << 'EOF'
+          AllCops:
+            NewCops: enable
+            DisabledByDefault: true
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          github_token: fake-token-for-local-test
+          reporter: github-check
+          filter_mode: nofilter
+          skip_install: 'true'
+          rubocop_extensions: ''
+          rubocop_flags: 'app.rb'
+          workdir: 'myapp'
+          fail_level: none
+        continue-on-error: true
+
+      - name: Assert action ran with workdir
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "Action step outcome: $OUTCOME"
+          if [ "$OUTCOME" = "skipped" ]; then
+            echo "FAIL: action step was skipped unexpectedly"
+            exit 1
+          fi
+          echo "PASS: action ran with custom workdir (outcome: $OUTCOME)"

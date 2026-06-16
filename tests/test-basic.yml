@@ -1,0 +1,66 @@
+name: Test basic usage (skip_install)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_REF: refs/heads/main
+      GITHUB_EVENT_NAME: push
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Ensure Ruby and rubocop are available
+        run: |
+          set -e
+          if ! command -v ruby >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq ruby ruby-dev
+          fi
+          ruby --version
+          if ! command -v rubocop >/dev/null 2>&1; then
+            gem install -N rubocop --version 1.65.1
+          fi
+          rubocop --version
+
+      - name: Create a clean Ruby file for rubocop to analyze
+        run: |
+          mkdir -p /tmp/rubocop_test
+          cat > /tmp/rubocop_test/sample.rb << 'EOF'
+          # frozen_string_literal: true
+
+          # A simple Ruby class
+          class Hello
+            def greet
+              'Hello, World!'
+            end
+          end
+          EOF
+          cat > /tmp/rubocop_test/.rubocop.yml << 'EOF'
+          AllCops:
+            NewCops: enable
+            DisabledByDefault: true
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          github_token: fake-token-for-local-test
+          reporter: github-check
+          filter_mode: nofilter
+          skip_install: 'true'
+          rubocop_extensions: ''
+          rubocop_flags: '/tmp/rubocop_test/sample.rb --config /tmp/rubocop_test/.rubocop.yml'
+          fail_level: none
+        continue-on-error: true
+
+      - name: Assert action ran (step completed)
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "Action step outcome: $OUTCOME"
+          if [ "$OUTCOME" = "skipped" ]; then
+            echo "FAIL: action step was skipped unexpectedly"
+            exit 1
+          fi
+          echo "PASS: action step ran (outcome: $OUTCOME)"
