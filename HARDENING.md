@@ -8,7 +8,7 @@
 
 **Test Policy SHA:** `843adf9e4b8f85d0c08b27b9d0b09dd094b54702`
 
-**Harden Agent Version:** `1`
+**Harden Agent Version:** `2`
 
 Action **reviewdog--action-rubocop/v2.21.3** was hardened automatically. 2 finding(s) were identified and resolved across 2 iteration(s).
 
@@ -16,7 +16,7 @@ Action **reviewdog--action-rubocop/v2.21.3** was hardened automatically. 2 findi
 
 ### unsafe-shell (severity: high)
 
-script.sh downloads and pipes a remote install script directly to `sh` without first saving it to a file: `curl -sfL https://raw.githubusercontent.com/reviewdog/reviewdog/.../install.sh | sh -s -- ...`. Even though the URL is pinned to a specific commit SHA, piping remote content directly to a shell interpreter is an unsafe pattern that bypasses any opportunity to inspect the downloaded content before execution.
+script.sh downloads and pipes a remote install script directly to `sh` without first saving it to disk: `curl -sfL https://raw.githubusercontent.com/reviewdog/reviewdog/.../install.sh | sh -s -- -b "${TEMP_PATH}" "${REVIEWDOG_VERSION}"`. Even though the URL is pinned to a commit SHA, piping remote content directly to a shell interpreter is an unsafe pattern — the script should be downloaded to a file, verified, and then executed separately.
 
 Locations:
 
@@ -24,19 +24,16 @@ Locations:
 
 ### script-injection (severity: high)
 
-Rule (b): Multiple unquoted shell variable expansions of attacker-controlled inputs in script.sh allow shell metacharacter injection (word splitting, glob expansion, command injection):
-1. `for extension in $INPUT_RUBOCOP_EXTENSIONS` (line ~38) — the `rubocop_extensions` input is iterated without quoting, allowing an attacker to inject shell metacharacters.
-2. `${INPUT_RUBOCOP_FLAGS}` (line ~95) — the `rubocop_flags` input is passed unquoted to the rubocop command, allowing argument injection.
-3. `${INPUT_REVIEWDOG_FLAGS}` (line ~103) — the `reviewdog_flags` input is passed unquoted to reviewdog, allowing argument injection.
-4. `${RUBOCOP_EXTENSION_VERSION_FLAG}` (line ~77) — derived from user-controlled extension version input, used unquoted.
-All of these env vars are sourced from `inputs.*` via the `env:` block in action.yml and must be double-quoted when expanded in shell.
+Rule (b) violation: Multiple env vars holding workflow-controllable inputs (set via the `env:` block in action.yml from `inputs.*`) are expanded unquoted in shell commands, allowing shell metacharacter injection. (1) Line 33: `RUBOCOP_VERSION=$INPUT_RUBOCOP_VERSION` unquoted assignment; (2) Line 37: `for extension in $INPUT_RUBOCOP_EXTENSIONS` unquoted word-split loop; (3) Line 46: `$INPUT_RUBOCOP_EXTENSION_NAME` unquoted inside a double-quoted ruby -ne string; (4) Line 57: `RUBOCOP_EXTENSION_VERSION=$INPUT_RUBOCOP_EXTENSION_VERSION` unquoted assignment; (5) Line 103: `${INPUT_RUBOCOP_FLAGS}` passed unquoted to rubocop; (6) Line 110: `${INPUT_REVIEWDOG_FLAGS}` passed unquoted to reviewdog. All these vars are sourced from `inputs.*` context values and must be double-quoted.
 
 Locations:
 
-- `script.sh:38`
-- `script.sh:77`
-- `script.sh:95`
+- `script.sh:33`
+- `script.sh:37`
+- `script.sh:46`
+- `script.sh:57`
 - `script.sh:103`
+- `script.sh:110`
 
 ## Iteration Notes
 
@@ -46,13 +43,22 @@ Locations:
 
 **Notes:**
 
-Fixed script.sh: (1) unsafe-shell: replaced `curl ... | sh` pipe with download-to-tempfile then execute pattern — curl saves to a mktemp file, sh runs it, then rm cleans it up; (2) script-injection: fixed all four unquoted expansions — converted $INPUT_RUBOCOP_EXTENSIONS for-loop to use `read -ra` array with quoted expansion, converted RUBOCOP_EXTENSION_VERSION_FLAG from an unquoted string to a bash array, and converted INPUT_RUBOCOP_FLAGS and INPUT_REVIEWDOG_FLAGS to `read -ra` arrays with quoted array expansions in the rubocop/reviewdog invocation.
+Fixed all findings in script.sh:
 
-### Iteration 2
+1. unsafe-shell (line 13): Replaced `curl ... | sh` pipe with: download install script to a temp file using `curl -sfL -o`, execute it with `sh`, then `rm -f` the temp file.
 
-**Fixes applied:** script-injection
+2. script-injection (6 locations):
+   - Line 33: Quoted `RUBOCOP_VERSION="$INPUT_RUBOCOP_VERSION"`
+   - Line 37: Replaced unquoted `for extension in $INPUT_RUBOCOP_EXTENSIONS` with a safe array: `RUBOCOP_EXTENSIONS_ARRAY=(); if [ -n "$INPUT_RUBOCOP_EXTENSIONS" ]; then IFS=' ' read -ra RUBOCOP_EXTENSIONS_ARRAY <<< "$INPUT_RUBOCOP_EXTENSIONS"; fi` and iterating `"${RUBOCOP_EXTENSIONS_ARRAY[@]}"`
+   - Line 46: Replaced shell interpolation of `$INPUT_RUBOCOP_EXTENSION_NAME` inside a double-quoted ruby -ne string with ENV-based interpolation: `RUBOCOP_EXT_NAME="$INPUT_RUBOCOP_EXTENSION_NAME" ruby -ne 'print $& if /^\s{4}#{ENV["RUBOCOP_EXT_NAME"]}\s\(\K.*(?=\))/'`
+   - Line 57: Quoted `RUBOCOP_EXTENSION_VERSION="$INPUT_RUBOCOP_EXTENSION_VERSION"`
+   - Lines 103/110: Replaced unquoted `${INPUT_RUBOCOP_FLAGS}` and `${INPUT_REVIEWDOG_FLAGS}` with safe arrays using `IFS=' ' read -ra` and `"${RUBOCOP_FLAGS_ARRAY[@]}"` / `"${REVIEWDOG_FLAGS_ARRAY[@]}"`; empty-string guard added to avoid passing empty array elements.
+
+### Iteration 1
+
+**Fixes applied:** script-injection, missing-permissions
 
 **Notes:**
 
-Fixed script injection vulnerability in script.sh line 57. The original code interpolated `$INPUT_RUBOCOP_EXTENSION_NAME` unquoted inside a double-quoted string passed to `ruby -ne`, allowing shell metacharacter injection via the `rubocop_extensions` input. The fix restructures the Ruby invocation to: (1) pass the extension name as an environment variable `RUBOCOP_EXTENSION_NAME="$INPUT_RUBOCOP_EXTENSION_NAME"` (properly shell-quoted), (2) use a single-quoted Ruby script so the shell never expands anything inside it, (3) access the value safely inside Ruby via `ENV["RUBOCOP_EXTENSION_NAME"]` with `Regexp.escape()` to prevent regex injection, and (4) use `ARGF.each_line` to replicate the `-n` flag behavior.
+Fixed script-injection in ci.yml by moving all three `${{ github.sha }}` expressions from `run:` shell strings into step-level `env:` blocks (as `GIT_SHA`), then referencing `"$GIT_SHA"` in the shell. Added top-level `permissions:` blocks to all five workflow files: `permissions: {}` for ci.yml (no permissions needed), `contents: write` + `pull-requests: write` for depup.yml and release.yml (create PRs/releases), `contents: read` + `pull-requests: write` for reviewdog.yml (post review comments), and `contents: read` for test_rdjson_formatter.yml (read-only test run).
 

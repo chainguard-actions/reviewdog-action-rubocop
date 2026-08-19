@@ -1,4 +1,4 @@
-name: Test rubocop_version input
+name: Test skip_install true - uses pre-installed rubocop
 on:
   workflow_dispatch:
 jobs:
@@ -28,12 +28,12 @@ jobs:
           level: error
           fail_level: none
           skip_install: 'true'
-          rubocop_version: '1.65.0'
           rubocop_extensions: ''
-          rubocop_flags: '--no-color tests/fixtures/ruby/clean.rb'
-          tool_name: rubocop-test-version
+          rubocop_flags: '--no-color app.rb'
+          workdir: tests/fixtures/ruby-workdir
+          tool_name: rubocop-test-skip-install
 
-      - name: Assert action completed successfully with rubocop_version set
+      - name: Assert action completed with skip_install=true
         run: |
-          echo "Action completed successfully with rubocop_version=1.65.0"
-          echo "PASS: rubocop_version input test passed"
+          echo "Action completed successfully with skip_install=true"
+          echo "PASS: skip_install test passed"

@@ -10,10 +10,10 @@ TEMP_PATH="$(mktemp -d)"
 PATH="${TEMP_PATH}:$PATH"
 
 echo '::group::🐶 Installing reviewdog ... https://github.com/reviewdog/reviewdog'
-INSTALL_SCRIPT="$(mktemp)"
-curl -sfL -o "${INSTALL_SCRIPT}" https://raw.githubusercontent.com/reviewdog/reviewdog/fd59714416d6d9a1c0692d872e38e7f8448df4fc/install.sh
-sh "${INSTALL_SCRIPT}" -b "${TEMP_PATH}" "${REVIEWDOG_VERSION}" 2>&1
-rm -f "${INSTALL_SCRIPT}"
+REVIEWDOG_INSTALL_SCRIPT="$(mktemp)"
+curl -sfL -o "${REVIEWDOG_INSTALL_SCRIPT}" https://raw.githubusercontent.com/reviewdog/reviewdog/fd59714416d6d9a1c0692d872e38e7f8448df4fc/install.sh
+sh "${REVIEWDOG_INSTALL_SCRIPT}" -b "${TEMP_PATH}" "${REVIEWDOG_VERSION}" 2>&1
+rm -f "${REVIEWDOG_INSTALL_SCRIPT}"
 echo '::endgroup::'
 
 if [ "${INPUT_SKIP_INSTALL}" = "false" ]; then
@@ -37,13 +37,16 @@ if [ "${INPUT_SKIP_INSTALL}" = "false" ]; then
     fi
   else
     # set desired rubocop version
-    RUBOCOP_VERSION=$INPUT_RUBOCOP_VERSION
+    RUBOCOP_VERSION="$INPUT_RUBOCOP_VERSION"
   fi
 
   gem install -N rubocop --version "${RUBOCOP_VERSION}"
 
   # Traverse over list of rubocop extensions
-  read -ra RUBOCOP_EXTENSIONS_ARRAY <<< "${INPUT_RUBOCOP_EXTENSIONS}"
+  RUBOCOP_EXTENSIONS_ARRAY=()
+  if [ -n "$INPUT_RUBOCOP_EXTENSIONS" ]; then
+    IFS=' ' read -ra RUBOCOP_EXTENSIONS_ARRAY <<< "$INPUT_RUBOCOP_EXTENSIONS"
+  fi
   for extension in "${RUBOCOP_EXTENSIONS_ARRAY[@]}"; do
     # grep for name and version
     INPUT_RUBOCOP_EXTENSION_NAME=$(echo "$extension" |awk 'BEGIN { FS = ":" } ; { print $1 }')
@@ -54,9 +57,7 @@ if [ "${INPUT_SKIP_INSTALL}" = "false" ]; then
       # if Gemfile.lock is here
       if [ -f 'Gemfile.lock' ]; then
         # grep for rubocop extension version
-        RUBOCOP_EXTENSION_GEMFILE_VERSION=$(RUBOCOP_EXTENSION_NAME="$INPUT_RUBOCOP_EXTENSION_NAME" ruby -e \
-          'pat = /^\s{4}#{Regexp.escape(ENV["RUBOCOP_EXTENSION_NAME"])}\s\(\K.*(?=\))/; ARGF.each_line { |l| print l[pat] if l[pat] }' \
-          Gemfile.lock)
+        RUBOCOP_EXTENSION_GEMFILE_VERSION=$(RUBOCOP_EXT_NAME="$INPUT_RUBOCOP_EXTENSION_NAME" ruby -ne 'print $& if /^\s{4}#{ENV["RUBOCOP_EXT_NAME"]}\s\(\K.*(?=\))/' Gemfile.lock)
 
         # if rubocop extension version found, then pass it to the gem install
         # left it empty otherwise, so no version will be passed
@@ -70,17 +71,18 @@ if [ "${INPUT_SKIP_INSTALL}" = "false" ]; then
       fi
     else
       # set desired rubocop extension version
-      RUBOCOP_EXTENSION_VERSION=$INPUT_RUBOCOP_EXTENSION_VERSION
+      RUBOCOP_EXTENSION_VERSION="$INPUT_RUBOCOP_EXTENSION_VERSION"
     fi
 
     # Handle extensions with no version qualifier
     if [ -z "${RUBOCOP_EXTENSION_VERSION}" ]; then
-      RUBOCOP_EXTENSION_VERSION_FLAG=()
+      unset RUBOCOP_EXTENSION_VERSION_FLAG
     else
-      RUBOCOP_EXTENSION_VERSION_FLAG=("--version" "${RUBOCOP_EXTENSION_VERSION}")
+      RUBOCOP_EXTENSION_VERSION_FLAG="--version ${RUBOCOP_EXTENSION_VERSION}"
     fi
 
-    gem install -N "${INPUT_RUBOCOP_EXTENSION_NAME}" "${RUBOCOP_EXTENSION_VERSION_FLAG[@]}"
+    # shellcheck disable=SC2086
+    gem install -N "${INPUT_RUBOCOP_EXTENSION_NAME}" ${RUBOCOP_EXTENSION_VERSION_FLAG}
   done
   echo '::endgroup::'
 fi
@@ -126,8 +128,15 @@ if [ "${INPUT_ONLY_CHANGED}" = "true" ]; then
 fi
 
 echo '::group:: Running rubocop with reviewdog 🐶 ...'
-read -ra RUBOCOP_FLAGS_ARRAY <<< "${INPUT_RUBOCOP_FLAGS}"
-read -ra REVIEWDOG_FLAGS_ARRAY <<< "${INPUT_REVIEWDOG_FLAGS}"
+RUBOCOP_FLAGS_ARRAY=()
+if [ -n "$INPUT_RUBOCOP_FLAGS" ]; then
+  IFS=' ' read -ra RUBOCOP_FLAGS_ARRAY <<< "$INPUT_RUBOCOP_FLAGS"
+fi
+REVIEWDOG_FLAGS_ARRAY=()
+if [ -n "$INPUT_REVIEWDOG_FLAGS" ]; then
+  IFS=' ' read -ra REVIEWDOG_FLAGS_ARRAY <<< "$INPUT_REVIEWDOG_FLAGS"
+fi
+# shellcheck disable=SC2086
 ${BUNDLE_EXEC}rubocop \
   --require "${GITHUB_ACTION_PATH}/rdjson_formatter/rdjson_formatter.rb" \
   --format RdjsonFormatter \

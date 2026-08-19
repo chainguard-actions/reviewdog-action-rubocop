@@ -1,41 +1,38 @@
-name: Test basic rubocop usage
+name: Test basic usage - clean Ruby file
 on:
   workflow_dispatch:
 jobs:
   test:
     runs-on: ubuntu-latest
-    env:
-      GITHUB_EVENT_NAME: push
-      GITHUB_REF: refs/heads/main
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Install rubocop and reviewdog manually
+      - name: Set up fake rubocop and curl for reviewdog install
         run: |
-          gem install rubocop --no-document
-          curl -sfL https://raw.githubusercontent.com/reviewdog/reviewdog/master/install.sh | sh -s -- -b /usr/local/bin v0.20.3
-
-      - name: Create a simple Ruby file to lint
-        run: |
-          mkdir -p /tmp/ruby-test
-          cat > /tmp/ruby-test/hello.rb << 'EOF'
-          # frozen_string_literal: true
-          puts 'hello'
-          EOF
+          FAKE_BIN="$GITHUB_WORKSPACE/tests/fixtures/fake-bin"
+          mkdir -p "$FAKE_BIN"
+          # Fake curl intercepts reviewdog install
+          cp "$GITHUB_WORKSPACE/tests/fixtures/fake-curl" "$FAKE_BIN/curl"
+          chmod +x "$FAKE_BIN/curl"
+          # Fake rubocop outputs valid rdjson with no violations
+          cp "$GITHUB_WORKSPACE/tests/fixtures/fake-rubocop" "$FAKE_BIN/rubocop"
+          chmod +x "$FAKE_BIN/rubocop"
+          echo "$FAKE_BIN" >> "$GITHUB_PATH"
 
       - id: action
         uses: .
         with:
           github_token: ${{ github.token }}
-          reporter: local
+          reporter: github-check
           filter_mode: nofilter
+          level: error
           fail_level: none
           skip_install: 'true'
           rubocop_extensions: ''
-          workdir: /tmp/ruby-test
-        continue-on-error: true
+          rubocop_flags: '--no-color tests/fixtures/ruby/clean.rb'
+          tool_name: rubocop-test-basic
 
-      - name: Assert action ran
+      - name: Assert action completed successfully
         run: |
-          echo "Action completed (rubocop ran with skip_install)"
-          echo "PASS"
+          echo "Action completed with exit code 0"
+          echo "PASS: basic usage test passed"

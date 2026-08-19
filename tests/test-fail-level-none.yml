@@ -1,4 +1,4 @@
-name: Test rubocop_version input
+name: Test fail_level none - violations found but exit 0
 on:
   workflow_dispatch:
 jobs:
@@ -25,15 +25,15 @@ jobs:
           github_token: ${{ github.token }}
           reporter: github-check
           filter_mode: nofilter
-          level: error
+          level: warning
           fail_level: none
           skip_install: 'true'
-          rubocop_version: '1.65.0'
           rubocop_extensions: ''
-          rubocop_flags: '--no-color tests/fixtures/ruby/clean.rb'
-          tool_name: rubocop-test-version
+          rubocop_flags: '--no-color bad.rb'
+          workdir: tests/fixtures/ruby-violations
+          tool_name: rubocop-test-fail-level-none
 
-      - name: Assert action completed successfully with rubocop_version set
+      - name: Assert action exited 0 despite violations (fail_level=none)
         run: |
-          echo "Action completed successfully with rubocop_version=1.65.0"
-          echo "PASS: rubocop_version input test passed"
+          echo "Action completed with exit code 0 despite rubocop violations"
+          echo "PASS: fail_level=none test passed"

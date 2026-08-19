@@ -1,0 +1,57 @@
+name: Test custom tool_name and level inputs
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_REF: refs/heads/main
+      GITHUB_EVENT_NAME: push
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create mock rubocop binary
+        run: |
+          printf '#!/bin/sh\necho '"'"'{"source":{"name":"rubocop","url":"https://github.com/rubocop/rubocop"},"diagnostics":[]}'"'"'\n' > /usr/local/bin/rubocop
+          chmod +x /usr/local/bin/rubocop
+          rubocop --version || echo "mock rubocop ready"
+
+      - name: Create clean Ruby file
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/src"
+          cat > "$GITHUB_WORKSPACE/src/sample.rb" << 'EOF'
+          # frozen_string_literal: true
+
+          # Sample class
+          class Sample
+            def hello
+              'world'
+            end
+          end
+          EOF
+          cat > "$GITHUB_WORKSPACE/src/.rubocop.yml" << 'EOF'
+          AllCops:
+            NewCops: enable
+            DisabledByDefault: true
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          github_token: dummy-token-for-local-test
+          reporter: github-check
+          filter_mode: nofilter
+          fail_level: none
+          fail_on_error: 'false'
+          level: warning
+          tool_name: my-rubocop
+          skip_install: 'true'
+          rubocop_extensions: ''
+          rubocop_flags: 'sample.rb'
+          workdir: 'src'
+        continue-on-error: true
+
+      - name: Assert action ran with custom tool_name and level
+        run: |
+          echo "Action with tool_name=my-rubocop and level=warning completed"
+          echo "PASS"

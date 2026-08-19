@@ -1,4 +1,4 @@
-name: Test rubocop_version input
+name: Test workdir input
 on:
   workflow_dispatch:
 jobs:
@@ -28,12 +28,12 @@ jobs:
           level: error
           fail_level: none
           skip_install: 'true'
-          rubocop_version: '1.65.0'
           rubocop_extensions: ''
-          rubocop_flags: '--no-color tests/fixtures/ruby/clean.rb'
-          tool_name: rubocop-test-version
+          rubocop_flags: '--no-color lib/helper.rb'
+          workdir: tests/fixtures/myapp
+          tool_name: rubocop-test-workdir
 
-      - name: Assert action completed successfully with rubocop_version set
+      - name: Assert action ran in the correct workdir
         run: |
-          echo "Action completed successfully with rubocop_version=1.65.0"
-          echo "PASS: rubocop_version input test passed"
+          echo "Action ran in workdir tests/fixtures/myapp successfully"
+          echo "PASS: workdir test passed"

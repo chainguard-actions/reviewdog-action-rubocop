@@ -1,0 +1,9 @@
+#!/bin/sh
+# Fake rubocop binary - outputs valid rdjson format with no violations
+# This avoids needing to install real rubocop
+
+# Output valid rdjson with no diagnostics
+cat <<'EOF'
+{"source":{"name":"rubocop","url":"https://rubocop.org"},"diagnostics":[]}
+EOF
+exit 0
