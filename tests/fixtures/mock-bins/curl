@@ -1,0 +1,22 @@
+#!/bin/sh
+# Fake curl: intercepts reviewdog download, supports both pipe and -o FILE forms
+out=""
+prev=""
+for arg in "$@"; do
+  case "$prev" in
+    -o|--output) out="$arg" ;;
+  esac
+  prev="$arg"
+done
+case "$*" in
+  *reviewdog*)
+    payload="$GITHUB_WORKSPACE/tests/fixtures/mock-bins/fake-reviewdog-install.sh"
+    if [ -n "$out" ]; then
+      cp "$payload" "$out"
+    else
+      cat "$payload"
+    fi
+    exit 0
+    ;;
+esac
+exec /usr/bin/curl "$@"

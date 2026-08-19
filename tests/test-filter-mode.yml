@@ -1,0 +1,35 @@
+name: Test filter_mode input
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up mock binaries from fixtures
+        run: |
+          mkdir -p /tmp/mock-bins-filter
+          cp "$GITHUB_WORKSPACE/tests/fixtures/mock-bins/curl" /tmp/mock-bins-filter/curl
+          cp "$GITHUB_WORKSPACE/tests/fixtures/mock-bins/rubocop" /tmp/mock-bins-filter/rubocop
+          chmod +x /tmp/mock-bins-filter/curl /tmp/mock-bins-filter/rubocop
+          echo "/tmp/mock-bins-filter" >> "$GITHUB_PATH"
+          echo "Mock binaries set up"
+
+      - name: Run action with filter_mode=file
+        uses: .
+        with:
+          skip_install: 'true'
+          reporter: 'github-check'
+          filter_mode: 'file'
+          fail_level: 'none'
+
+      - name: Assert reviewdog was called with filter-mode=file
+        run: |
+          echo "reviewdog calls log:"
+          cat /tmp/reviewdog-calls.log || echo "(log not found)"
+          if ! grep -q "filter-mode=file" /tmp/reviewdog-calls.log 2>/dev/null; then
+            echo "FAIL: reviewdog was not called with -filter-mode=file"
+            exit 1
+          fi
+          echo "PASS: reviewdog called with correct filter-mode"

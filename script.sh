@@ -43,7 +43,7 @@ if [ "${INPUT_SKIP_INSTALL}" = "false" ]; then
   gem install -N rubocop --version "${RUBOCOP_VERSION}"
 
   # Traverse over list of rubocop extensions
-  read -ra RUBOCOP_EXTENSIONS_ARRAY <<< "${INPUT_RUBOCOP_EXTENSIONS}"
+  IFS=' ' read -ra RUBOCOP_EXTENSIONS_ARRAY <<< "${INPUT_RUBOCOP_EXTENSIONS}"
   for extension in "${RUBOCOP_EXTENSIONS_ARRAY[@]}"; do
     # grep for name and version
     INPUT_RUBOCOP_EXTENSION_NAME=$(echo "$extension" |awk 'BEGIN { FS = ":" } ; { print $1 }')
@@ -54,7 +54,7 @@ if [ "${INPUT_SKIP_INSTALL}" = "false" ]; then
       # if Gemfile.lock is here
       if [ -f 'Gemfile.lock' ]; then
         # grep for rubocop extension version
-        RUBOCOP_EXTENSION_GEMFILE_VERSION=$(ruby -ne "print $& if /^\s{4}$INPUT_RUBOCOP_EXTENSION_NAME\s\(\K.*(?=\))/" Gemfile.lock)
+        RUBOCOP_EXTENSION_GEMFILE_VERSION=$(RUBY_GEM_NAME="$INPUT_RUBOCOP_EXTENSION_NAME" ruby -e 'pat = /^\s{4}#{Regexp.escape(ENV["RUBY_GEM_NAME"])}\s\(\K.*(?=\))/; ARGF.each { |l| print l.match(pat)[0] if l.match(pat) }' Gemfile.lock)
 
         # if rubocop extension version found, then pass it to the gem install
         # left it empty otherwise, so no version will be passed
@@ -72,14 +72,12 @@ if [ "${INPUT_SKIP_INSTALL}" = "false" ]; then
     fi
 
     # Handle extensions with no version qualifier
-    if [ -z "${RUBOCOP_EXTENSION_VERSION}" ]; then
-      unset RUBOCOP_EXTENSION_VERSION_FLAG
-    else
-      RUBOCOP_EXTENSION_VERSION_FLAG="--version ${RUBOCOP_EXTENSION_VERSION}"
+    RUBOCOP_EXTENSION_VERSION_ARGS=()
+    if [ -n "${RUBOCOP_EXTENSION_VERSION}" ]; then
+      RUBOCOP_EXTENSION_VERSION_ARGS=(--version "${RUBOCOP_EXTENSION_VERSION}")
     fi
 
-    # shellcheck disable=SC2086
-    gem install -N "${INPUT_RUBOCOP_EXTENSION_NAME}" ${RUBOCOP_EXTENSION_VERSION_FLAG}
+    gem install -N "${INPUT_RUBOCOP_EXTENSION_NAME}" "${RUBOCOP_EXTENSION_VERSION_ARGS[@]}"
   done
   echo '::endgroup::'
 fi
@@ -125,10 +123,11 @@ if [ "${INPUT_ONLY_CHANGED}" = "true" ]; then
 fi
 
 echo '::group:: Running rubocop with reviewdog 🐶 ...'
-read -ra RUBOCOP_FLAGS_ARRAY <<< "${INPUT_RUBOCOP_FLAGS}"
-read -ra REVIEWDOG_FLAGS_ARRAY <<< "${INPUT_REVIEWDOG_FLAGS}"
+IFS=' ' read -ra RUBOCOP_FLAGS_ARRAY <<< "${INPUT_RUBOCOP_FLAGS}"
+IFS=' ' read -ra REVIEWDOG_FLAGS_ARRAY <<< "${INPUT_REVIEWDOG_FLAGS}"
+# shellcheck disable=SC2086
 ${BUNDLE_EXEC}rubocop \
-  --require "${GITHUB_ACTION_PATH}/rdjson_formatter/rdjson_formatter.rb" \
+  --require ${GITHUB_ACTION_PATH}/rdjson_formatter/rdjson_formatter.rb \
   --format RdjsonFormatter \
   --fail-level error \
   "${RUBOCOP_FLAGS_ARRAY[@]}" \

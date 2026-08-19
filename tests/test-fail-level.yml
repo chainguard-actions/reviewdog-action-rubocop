@@ -1,0 +1,45 @@
+name: Test fail_level none (always succeed)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up mock binaries from fixtures
+        run: |
+          mkdir -p /tmp/mock-bins-fail
+          cp "$GITHUB_WORKSPACE/tests/fixtures/mock-bins/curl" /tmp/mock-bins-fail/curl
+          cp "$GITHUB_WORKSPACE/tests/fixtures/mock-bins/rubocop" /tmp/mock-bins-fail/rubocop
+          chmod +x /tmp/mock-bins-fail/curl /tmp/mock-bins-fail/rubocop
+          echo "/tmp/mock-bins-fail" >> "$GITHUB_PATH"
+          echo "Mock binaries set up"
+
+      - name: Run action with fail_level=none
+        uses: .
+        with:
+          skip_install: 'true'
+          reporter: 'github-check'
+          filter_mode: 'nofilter'
+          fail_level: 'none'
+          level: 'warning'
+          tool_name: 'rubocop-test'
+
+      - name: Assert reviewdog was called with correct flags
+        run: |
+          echo "reviewdog calls log:"
+          cat /tmp/reviewdog-calls.log || echo "(log not found)"
+          if ! grep -q "fail-level=none" /tmp/reviewdog-calls.log 2>/dev/null; then
+            echo "FAIL: reviewdog was not called with -fail-level=none"
+            exit 1
+          fi
+          if ! grep -q "level=warning" /tmp/reviewdog-calls.log 2>/dev/null; then
+            echo "FAIL: reviewdog was not called with -level=warning"
+            exit 1
+          fi
+          if ! grep -q "rubocop-test" /tmp/reviewdog-calls.log 2>/dev/null; then
+            echo "FAIL: reviewdog was not called with tool name rubocop-test"
+            exit 1
+          fi
+          echo "PASS: reviewdog called with correct flags"

@@ -1,0 +1,36 @@
+name: Test reviewdog_flags input
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up mock binaries from fixtures
+        run: |
+          mkdir -p /tmp/mock-bins-rdflags
+          cp "$GITHUB_WORKSPACE/tests/fixtures/mock-bins/curl" /tmp/mock-bins-rdflags/curl
+          cp "$GITHUB_WORKSPACE/tests/fixtures/mock-bins/rubocop" /tmp/mock-bins-rdflags/rubocop
+          chmod +x /tmp/mock-bins-rdflags/curl /tmp/mock-bins-rdflags/rubocop
+          echo "/tmp/mock-bins-rdflags" >> "$GITHUB_PATH"
+          echo "Mock binaries set up"
+
+      - name: Run action with extra reviewdog_flags
+        uses: .
+        with:
+          skip_install: 'true'
+          reporter: 'github-check'
+          filter_mode: 'nofilter'
+          fail_level: 'none'
+          reviewdog_flags: '-tee'
+
+      - name: Assert extra reviewdog flags were passed
+        run: |
+          echo "reviewdog calls log:"
+          cat /tmp/reviewdog-calls.log || echo "(log not found)"
+          if ! grep -q "\-tee" /tmp/reviewdog-calls.log 2>/dev/null; then
+            echo "FAIL: extra reviewdog flag '-tee' was not passed to reviewdog"
+            exit 1
+          fi
+          echo "PASS: extra reviewdog flags were passed correctly"

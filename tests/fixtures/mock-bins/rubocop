@@ -1,0 +1,5 @@
+#!/bin/sh
+# Mock rubocop: emit minimal rdjson output, log calls
+echo "rubocop called in: $(pwd) with args: $*" >> /tmp/rubocop-calls.log
+echo '{"source":{"name":"rubocop","url":"https://rubocop.org"},"diagnostics":[]}'
+exit 0

@@ -1,0 +1,5 @@
+#!/bin/sh
+# Mock bundle: record calls, emit rdjson when called as 'bundle exec rubocop ...'
+echo "bundle called with: $*" >> /tmp/bundle-calls.log
+echo '{"source":{"name":"rubocop","url":"https://rubocop.org"},"diagnostics":[]}'
+exit 0

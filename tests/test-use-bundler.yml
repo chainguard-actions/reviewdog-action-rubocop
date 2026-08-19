@@ -1,0 +1,37 @@
+name: Test use_bundler input
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up mock binaries from fixtures
+        run: |
+          mkdir -p /tmp/mock-bins-bundler
+          cp "$GITHUB_WORKSPACE/tests/fixtures/mock-bins/curl" /tmp/mock-bins-bundler/curl
+          cp "$GITHUB_WORKSPACE/tests/fixtures/mock-bins/rubocop" /tmp/mock-bins-bundler/rubocop
+          cp "$GITHUB_WORKSPACE/tests/fixtures/mock-bins/bundle" /tmp/mock-bins-bundler/bundle
+          chmod +x /tmp/mock-bins-bundler/curl /tmp/mock-bins-bundler/rubocop /tmp/mock-bins-bundler/bundle
+          echo "/tmp/mock-bins-bundler" >> "$GITHUB_PATH"
+          echo "Mock binaries set up"
+
+      - name: Run action with use_bundler=true
+        uses: .
+        with:
+          skip_install: 'true'
+          use_bundler: 'true'
+          reporter: 'github-check'
+          filter_mode: 'nofilter'
+          fail_level: 'none'
+
+      - name: Assert bundle exec was used
+        run: |
+          echo "bundle calls log:"
+          cat /tmp/bundle-calls.log || echo "(log not found)"
+          if ! grep -q "exec rubocop" /tmp/bundle-calls.log 2>/dev/null; then
+            echo "FAIL: bundle exec rubocop was not called"
+            exit 1
+          fi
+          echo "PASS: bundle exec rubocop was called correctly"

@@ -4,64 +4,33 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    env:
-      GITHUB_REF: refs/heads/main
-      GITHUB_EVENT_NAME: push
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Ensure Ruby and rubocop are available
+      - name: Set up mock binaries from fixtures
         run: |
-          set -e
-          if ! command -v ruby >/dev/null 2>&1; then
-            sudo apt-get update -qq
-            sudo apt-get install -y -qq ruby ruby-dev
-          fi
-          ruby --version
-          if ! command -v rubocop >/dev/null 2>&1; then
-            gem install -N rubocop --version 1.65.1
-          fi
-          rubocop --version
+          mkdir -p /tmp/mock-bins-workdir
+          cp "$GITHUB_WORKSPACE/tests/fixtures/mock-bins/curl" /tmp/mock-bins-workdir/curl
+          cp "$GITHUB_WORKSPACE/tests/fixtures/mock-bins/rubocop" /tmp/mock-bins-workdir/rubocop
+          chmod +x /tmp/mock-bins-workdir/curl /tmp/mock-bins-workdir/rubocop
+          echo "/tmp/mock-bins-workdir" >> "$GITHUB_PATH"
+          echo "Mock binaries set up"
 
-      - name: Create a subdirectory with a clean Ruby file
-        run: |
-          mkdir -p "$GITHUB_WORKSPACE/myapp"
-          cat > "$GITHUB_WORKSPACE/myapp/app.rb" << 'EOF'
-          # frozen_string_literal: true
-
-          # A simple Ruby class
-          class MyApp
-            def run
-              'running'
-            end
-          end
-          EOF
-          cat > "$GITHUB_WORKSPACE/myapp/.rubocop.yml" << 'EOF'
-          AllCops:
-            NewCops: enable
-            DisabledByDefault: true
-          EOF
-
-      - id: action
+      - name: Run action with workdir set
         uses: .
         with:
-          github_token: fake-token-for-local-test
-          reporter: github-check
-          filter_mode: nofilter
           skip_install: 'true'
-          rubocop_extensions: ''
-          rubocop_flags: 'app.rb'
-          workdir: 'myapp'
-          fail_level: none
-        continue-on-error: true
+          reporter: 'github-check'
+          filter_mode: 'nofilter'
+          fail_level: 'none'
+          workdir: 'tests/fixtures/myapp'
 
-      - name: Assert action ran with workdir
-        env:
-          OUTCOME: ${{ steps.action.outcome }}
+      - name: Assert rubocop ran in the correct workdir
         run: |
-          echo "Action step outcome: $OUTCOME"
-          if [ "$OUTCOME" = "skipped" ]; then
-            echo "FAIL: action step was skipped unexpectedly"
+          echo "rubocop calls log:"
+          cat /tmp/rubocop-calls.log || echo "(log not found)"
+          if ! grep -q "myapp" /tmp/rubocop-calls.log 2>/dev/null; then
+            echo "FAIL: rubocop was not called in the expected workdir (myapp)"
             exit 1
           fi
-          echo "PASS: action ran with custom workdir (outcome: $OUTCOME)"
+          echo "PASS: rubocop ran in the correct workdir"
