@@ -1,0 +1,49 @@
+name: Test install of rubocop version and extensions
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install fake gem and rubocop on PATH
+        run: |
+          mkdir -p /tmp/fakebin /tmp/fake-rubocop
+          rm -f /tmp/fake-rubocop/*
+          cat > /tmp/fakebin/rubocop <<'EOF'
+          #!/bin/sh
+          echo "$@" >> /tmp/fake-rubocop/args.log
+          echo '{"source":{"name":"rubocop"},"diagnostics":[]}'
+          EOF
+          cat > /tmp/fakebin/gem <<'EOF'
+          #!/bin/sh
+          echo "$@" >> /tmp/fake-rubocop/gem.log
+          exit 0
+          EOF
+          chmod +x /tmp/fakebin/rubocop /tmp/fakebin/gem
+          echo "/tmp/fakebin" >> "$GITHUB_PATH"
+      - id: action
+        uses: .
+        with:
+          rubocop_version: '1.50.0'
+          rubocop_extensions: 'rubocop-rails:2.19.0 rubocop-rspec'
+          reporter: local
+          filter_mode: nofilter
+      - name: Assert gem install invocations
+        run: |
+          echo "gem log:"; cat /tmp/fake-rubocop/gem.log || true
+          for expected in \
+            'install -N rubocop --version 1.50.0' \
+            'install -N rubocop-rails --version 2.19.0' \
+            'install -N rubocop-rspec'; do
+            if ! grep -qxF "$expected" /tmp/fake-rubocop/gem.log; then
+              echo "FAIL: missing gem invocation '$expected'"
+              exit 1
+            fi
+          done
+          if grep -q 'rubocop-performance' /tmp/fake-rubocop/gem.log; then
+            echo "FAIL: default extensions should not be installed"
+            exit 1
+          fi
+          [ -s /tmp/fake-rubocop/args.log ] || { echo "FAIL: rubocop not invoked"; exit 1; }
+          echo "PASS"

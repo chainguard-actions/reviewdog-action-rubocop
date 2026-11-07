@@ -1,0 +1,55 @@
+name: Test basic usage (no offenses)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install fake rubocop on PATH
+        run: |
+          mkdir -p /tmp/fakebin /tmp/fake-rubocop
+          rm -f /tmp/fake-rubocop/*
+          cat > /tmp/fakebin/rubocop <<'EOF'
+          #!/bin/sh
+          echo "$@" >> /tmp/fake-rubocop/args.log
+          pwd > /tmp/fake-rubocop/cwd.log
+          if [ -f /tmp/fake-rubocop/output.json ]; then
+            cat /tmp/fake-rubocop/output.json
+          else
+            echo '{"source":{"name":"rubocop"},"diagnostics":[]}'
+          fi
+          EOF
+          chmod +x /tmp/fakebin/rubocop
+          echo "/tmp/fakebin" >> "$GITHUB_PATH"
+      - id: action
+        uses: .
+        with:
+          skip_install: 'true'
+          reporter: local
+          filter_mode: nofilter
+          fail_level: any
+      - name: Assert rubocop was invoked with the rdjson formatter
+        run: |
+          echo "args:"; cat /tmp/fake-rubocop/args.log || true
+          ARGS="$(cat /tmp/fake-rubocop/args.log)"
+          echo "$ARGS" | grep -q -- '--format RdjsonFormatter' || { echo "FAIL: missing --format RdjsonFormatter"; exit 1; }
+          echo "$ARGS" | grep -q -- '--fail-level error' || { echo "FAIL: missing --fail-level error"; exit 1; }
+          REQ="$(echo "$ARGS" | sed -n 's/.*--require \([^ ]*\).*/\1/p')"
+          echo "require: $REQ"
+          if [ ! -f "$REQ" ]; then
+            echo "FAIL: required formatter file does not exist"
+            exit 1
+          fi
+          case "$REQ" in
+            */rdjson_formatter/rdjson_formatter.rb) ;;
+            *) echo "FAIL: unexpected formatter path"; exit 1 ;;
+          esac
+          echo "PASS"
+      - name: Assert outcome success
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          [ "$OUTCOME" = "success" ] || { echo "FAIL"; exit 1; }
+          echo "PASS"

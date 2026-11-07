@@ -1,0 +1,41 @@
+name: Test use_bundler
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install fake bundle and rubocop on PATH
+        run: |
+          mkdir -p /tmp/fakebin /tmp/fake-rubocop
+          rm -f /tmp/fake-rubocop/*
+          cat > /tmp/fakebin/rubocop <<'EOF'
+          #!/bin/sh
+          echo "$@" >> /tmp/fake-rubocop/args.log
+          echo '{"source":{"name":"rubocop"},"diagnostics":[]}'
+          EOF
+          cat > /tmp/fakebin/bundle <<'EOF'
+          #!/bin/sh
+          echo "$@" >> /tmp/fake-rubocop/bundle.log
+          if [ "$1" = "exec" ]; then shift; exec "$@"; fi
+          exit 0
+          EOF
+          chmod +x /tmp/fakebin/rubocop /tmp/fakebin/bundle
+          echo "/tmp/fakebin" >> "$GITHUB_PATH"
+      - id: action
+        uses: .
+        with:
+          skip_install: 'true'
+          use_bundler: 'true'
+          reporter: local
+          filter_mode: nofilter
+      - name: Assert rubocop ran through bundle exec
+        run: |
+          echo "bundle log:"; cat /tmp/fake-rubocop/bundle.log || true
+          if ! grep -q '^exec rubocop .*--format RdjsonFormatter' /tmp/fake-rubocop/bundle.log; then
+            echo "FAIL: rubocop not run via bundle exec"
+            exit 1
+          fi
+          [ -s /tmp/fake-rubocop/args.log ] || { echo "FAIL: rubocop not invoked"; exit 1; }
+          echo "PASS"

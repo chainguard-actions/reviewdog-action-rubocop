@@ -1,0 +1,37 @@
+name: Test offenses with fail_level none succeed
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install fake rubocop on PATH reporting an offense
+        run: |
+          mkdir -p /tmp/fakebin /tmp/fake-rubocop
+          rm -f /tmp/fake-rubocop/*
+          printf 'x = 1\n' > "$GITHUB_WORKSPACE/fake_offense.rb"
+          cat > /tmp/fake-rubocop/output.json <<'EOF'
+          {"source":{"name":"rubocop","url":"https://rubocop.org"},"severity":"ERROR","diagnostics":[{"message":"Useless assignment to variable - x.","location":{"path":"fake_offense.rb","range":{"start":{"line":1,"column":1},"end":{"line":1,"column":2}}},"severity":"ERROR","code":{"value":"Lint/UselessAssignment"}}]}
+          EOF
+          cat > /tmp/fakebin/rubocop <<'EOF'
+          #!/bin/sh
+          echo "$@" >> /tmp/fake-rubocop/args.log
+          cat /tmp/fake-rubocop/output.json
+          EOF
+          chmod +x /tmp/fakebin/rubocop
+          echo "/tmp/fakebin" >> "$GITHUB_PATH"
+      - id: action
+        uses: .
+        with:
+          skip_install: 'true'
+          reporter: local
+          filter_mode: nofilter
+      - name: Assert step succeeded and rubocop ran
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          [ -s /tmp/fake-rubocop/args.log ] || { echo "FAIL: rubocop not invoked"; exit 1; }
+          [ "$OUTCOME" = "success" ] || { echo "FAIL: expected success"; exit 1; }
+          echo "PASS"

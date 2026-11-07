@@ -1,0 +1,39 @@
+name: Test workdir and rubocop_flags
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install fake rubocop and create workdir
+        run: |
+          mkdir -p /tmp/fakebin /tmp/fake-rubocop "$GITHUB_WORKSPACE/rubyproj-sub"
+          rm -f /tmp/fake-rubocop/*
+          cat > /tmp/fakebin/rubocop <<'EOF'
+          #!/bin/sh
+          echo "$@" >> /tmp/fake-rubocop/args.log
+          pwd > /tmp/fake-rubocop/cwd.log
+          echo '{"source":{"name":"rubocop"},"diagnostics":[]}'
+          EOF
+          chmod +x /tmp/fakebin/rubocop
+          echo "/tmp/fakebin" >> "$GITHUB_PATH"
+      - id: action
+        uses: .
+        with:
+          skip_install: 'true'
+          reporter: local
+          filter_mode: nofilter
+          tool_name: my-rubocop
+          workdir: rubyproj-sub
+          rubocop_flags: '--display-cop-names --extra-details'
+      - name: Assert workdir and flags
+        run: |
+          echo "cwd: $(cat /tmp/fake-rubocop/cwd.log)"
+          echo "args: $(cat /tmp/fake-rubocop/args.log)"
+          case "$(cat /tmp/fake-rubocop/cwd.log)" in
+            */rubyproj-sub) ;;
+            *) echo "FAIL: rubocop not run from workdir"; exit 1 ;;
+          esac
+          grep -q -- '--display-cop-names --extra-details' /tmp/fake-rubocop/args.log || { echo "FAIL: rubocop_flags not passed"; exit 1; }
+          echo "PASS"
