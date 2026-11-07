@@ -13,6 +13,7 @@ Hardened by [Chainguard](https://www.chainguard.dev) from the upstream action at
 | v2.21.3 | [`v2.21.3`](https://github.com/chainguard-actions/reviewdog-action-rubocop/tree/v2.21.3) | [`6b7e953`](https://github.com/reviewdog/action-rubocop/commit/6b7e953d8b63e3e67b3c6464843d2d7eabf1c53c) | [`HARDENING.md`](https://github.com/chainguard-actions/reviewdog-action-rubocop/blob/v2.21.3/HARDENING.md) |
 | v2.22 | [`v2.22`](https://github.com/chainguard-actions/reviewdog-action-rubocop/tree/v2.22) | [`b6d5e95`](https://github.com/reviewdog/action-rubocop/commit/b6d5e953a5fc0bf3ab65254e77730ea2174d6d6d) | — |
 | v2.22.0 | [`v2.22.0`](https://github.com/chainguard-actions/reviewdog-action-rubocop/tree/v2.22.0) | [`b6d5e95`](https://github.com/reviewdog/action-rubocop/commit/b6d5e953a5fc0bf3ab65254e77730ea2174d6d6d) | [`HARDENING.md`](https://github.com/chainguard-actions/reviewdog-action-rubocop/blob/v2.22.0/HARDENING.md) |
+| v2.23.0 | [`v2.23.0`](https://github.com/chainguard-actions/reviewdog-action-rubocop/tree/v2.23.0) | [`3ed4a94`](https://github.com/reviewdog/action-rubocop/commit/3ed4a947f3051b184d27eac7ac903d3fe68563ed) | [`HARDENING.md`](https://github.com/chainguard-actions/reviewdog-action-rubocop/blob/v2.23.0/HARDENING.md) |
 
 ## Privacy
 
